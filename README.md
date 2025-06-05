@@ -6,7 +6,7 @@ Tool for identifying and flagging lengthy lines of code in a PDF.
 * main: cli
 * ~~pdf_reader: split pdf into images, map images to PDF pages~~
 * ~~ai_service: analyze images, flagging instances of long code lines and providing coord in inches, problematic code, and reformatting suggestion~~
-* ai_service: translate response into a useful data structure
+* ~~ai_service: translate response into a useful data structure~~
 * pdf_writer: write annotations back to pdf copy, optional txt output
 
 # Options
