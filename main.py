@@ -73,6 +73,8 @@ def start(pdf_path, existing_page_analyses_json=None):
 
             click.echo(f"Processing page {i+1} of {len(page_images)}...")
 
+            page_num = page_image.pdf_page
+
             # enrich page_image with base64_string (lazy loaded)
             image_filepath = page_image.image_filepath
             image_data_uri = get_data_uri_for_image(image_filepath)
@@ -80,6 +82,7 @@ def start(pdf_path, existing_page_analyses_json=None):
             # send images to ai_service and prompt, return responses
             pdf_page_analyzer = PDFPageAnalyzer()
             page_analysis = pdf_page_analyzer.assess_image(
+                page_num=page_num,
                 image_data_uri=image_data_uri, 
                 text_width_inches=text_width_inches, 
                 should_suggest_resolution=should_suggest_resolution, 

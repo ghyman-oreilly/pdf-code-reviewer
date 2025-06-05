@@ -28,6 +28,7 @@ class ProblematicCodeBlock(BaseModel):
 
 
 class PDFPageAnalysis(BaseModel):
+    page_num: Union[int, None] = None
     analysis_failed: Union[bool, None] = None
     page_has_issue: Union[bool, None] = None
     page_problematic_code_blocks: Union[List[ProblematicCodeBlock], List] = []
@@ -143,7 +144,8 @@ class PDFPageAnalyzer:
         return response.output_text
     
     def assess_image(
-        self, 
+        self,
+        page_num: int, 
         image_data_uri: str, 
         text_width_inches: Union[str, float, int],
         fail_string: str = 'UNABLE_TO_ASSESS',
@@ -171,7 +173,7 @@ class PDFPageAnalyzer:
 
         if re.search(fail_string, raw_page_analysis, flags=re.I):
             # analysis failed
-            return PDFPageAnalysis(analysis_failed=True)
+            return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
         
         if not re.search(issues_str, raw_page_analysis, flags=re.I):
             # no page issue found
@@ -181,7 +183,7 @@ class PDFPageAnalyzer:
             and issue_reformatting instead? maybe get
             some testing in and see how it goes
             """
-            return PDFPageAnalysis(page_has_issue=False)
+            return PDFPageAnalysis(page_num=page_num, page_has_issue=False)
 
         # issue(s) found?
         issue_locations = re.findall(r'ISSUE\s+(\d+)\s+LOCATION:\s*(\d+\.?\d*)\s*inches', raw_page_analysis, flags=re.I)
@@ -189,7 +191,7 @@ class PDFPageAnalyzer:
         
         if not issue_locations and not issue_reformatting_suggestions:
             # analysis failed
-            return PDFPageAnalysis(analysis_failed=True)
+            return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
         
         # combine data into tuples, one for each numbered issue
         locations_and_code_suggestions = self._combine_loc_and_formatting_tuples(issue_locations, issue_reformatting_suggestions)
@@ -205,6 +207,7 @@ class PDFPageAnalyzer:
             )
         
         return PDFPageAnalysis(
+            page_num=page_num,
             page_has_issue=True,
             page_problematic_code_blocks=page_problematic_code_blocks
         )
