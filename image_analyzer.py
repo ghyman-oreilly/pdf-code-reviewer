@@ -6,6 +6,7 @@ from pydantic import BaseModel, model_validator
 import openai
 import os
 import re
+import time
 from typing import Union, List, Tuple
 
 from pdf_reader import PDFPageImage
@@ -121,7 +122,8 @@ class PDFPageAnalyzer:
             no_issues_str: str = 'NO_ISSUES',
             issues_str: str = 'ISSUES_FOUND',
             should_suggest_resolution: bool = True,
-            detail="high"        
+            detail="high",
+            delay: int = 0.5
     ):
         """
         Generates sends image and prompt to AI for assessment.
@@ -141,6 +143,8 @@ class PDFPageAnalyzer:
             input=prompt
         )
         
+        time.sleep(delay)
+
         return response.output_text
     
     def assess_image(
@@ -152,7 +156,8 @@ class PDFPageAnalyzer:
         no_issues_str: str = 'NO_ISSUES',
         issues_str: str = 'ISSUES_FOUND',
         should_suggest_resolution: bool = True,
-        detail="high"    
+        detail="high",
+        delay: int = 0.5    
     ):
         """
         Call AI service for analysis of PDF page image,
@@ -168,7 +173,8 @@ class PDFPageAnalyzer:
             no_issues_str, 
             issues_str, 
             should_suggest_resolution, 
-            detail
+            detail,
+            delay
         )
 
         if re.search(fail_string, raw_page_analysis, flags=re.I):
