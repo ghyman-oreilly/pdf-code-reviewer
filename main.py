@@ -91,6 +91,8 @@ def start(pdf_path, existing_page_analyses_json=None):
             )
             if page_analysis:
                 page_analyses.append(page_analysis)
+
+            
         if page_analyses:
             # write analyses to file in case user wants to reload in future
             # e.g., user needs a new annotated PDF and doesn't want to rerun analysis service
@@ -101,6 +103,8 @@ def start(pdf_path, existing_page_analyses_json=None):
     else:
         page_analyses: List[PDFPageAnalysis] = generate_page_analyses_from_file(existing_page_analyses_json)
     
+    click.echo("Writing annotations to PDF...")
+
     # generate annotated PDF representation and write to file
     annotated_pdf = write_page_analyses_to_pdf(
 		page_analyses=page_analyses, 

@@ -15,7 +15,7 @@ from pdf_reader import PDFPageImage
 load_dotenv()
 
 # init logger
-logger = logging.Logger
+logger = logging.getLogger(__name__)
 
 # initialize client
 api_key = os.getenv("OPENAI_API_KEY")

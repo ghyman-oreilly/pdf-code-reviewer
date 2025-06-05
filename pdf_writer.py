@@ -6,7 +6,7 @@ from typing import List, Union
 from image_analyzer import PDFPageAnalysis
 
 
-logger = logging.Logger
+logger = logging.getLogger(__name__)
 
 
 def write_page_analyses_to_pdf(
