@@ -44,6 +44,7 @@ def start(pdf_path, existing_page_analyses_json=None):
 
     output_path = pdf_path.parent
 
+
     text_width_inches: float = 4.8 # TODO: make configurable (via menu?)
     should_suggest_resolution = True # TODO: make configurable
 
@@ -88,10 +89,10 @@ def start(pdf_path, existing_page_analyses_json=None):
         if page_analyses:
             # write analyses to file in case user wants to reload in future
             # e.g., user needs a new annotated PDF and doesn't want to rerun analysis service
-            analyses_save_filepath = output_path / f"page_analyses_{int(time.time())}.json"
+            analyses_save_filepath = output_path / f"page_analyses_backup_{int(time.time())}.json"
             with open(str(analyses_save_filepath), 'w') as f:
                 json.dump([pa.model_dump() for pa in page_analyses], f)
-            click.echo(f"Raw page analyses (JSON format) written to {analyses_save_filepath}")
+            click.echo(f"Raw page analyses (JSON format) backed up at {analyses_save_filepath}")
     else:
         page_analyses: List[PDFPageAnalysis] = generate_page_analyses_from_file(existing_page_analyses_json)
     
