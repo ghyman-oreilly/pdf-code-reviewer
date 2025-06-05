@@ -78,7 +78,7 @@ def add_text_annotation_to_page(
 
 	page_width = page_rect.width
 
-	if inches_from_left/72 > page_width:
+	if inches_from_left*72 > page_width:
 		logger.error(f"Invalid value for `inches_from_left`: {inches_from_left}. Must be less than {page_width*72}. Falling back to default.")
 		inches_from_left = None
 
@@ -91,7 +91,7 @@ def add_text_annotation_to_page(
 		if not inches_from_left:
 			inches_from_left = (page_width - 72)/72 # fallback/default inches from left
 		try:
-			point = (inches_from_left/72, inches_from_top/72) # point in inches to points
+			point = (inches_from_left*72, inches_from_top*72) # point in inches to points
 		except Exception as e:
 			logger.error(f"Unable to calculate location for annotation on p. {page.page_num + 1} (absolute page num). {e}")
 			return None
