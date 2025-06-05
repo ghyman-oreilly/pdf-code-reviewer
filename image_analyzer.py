@@ -128,25 +128,30 @@ class PDFPageAnalyzer:
         """
         Generates sends image and prompt to AI for assessment.
         """
-        prompt = self._create_prompt(
-            image_data_uri, 
-            text_width_inches, 
-            fail_string, 
-            no_issues_str, 
-            issues_str, 
-            should_suggest_resolution, 
-            detail
-        )
-        
-        response = client.responses.create(
-            model=self.model,
-            input=prompt
-        )
-        
-        time.sleep(delay)
+        try:
+            prompt = self._create_prompt(
+                image_data_uri, 
+                text_width_inches, 
+                fail_string, 
+                no_issues_str, 
+                issues_str, 
+                should_suggest_resolution, 
+                detail
+            )
+            
+            response = client.responses.create(
+                model=self.model,
+                input=prompt
+            )
+            
+            time.sleep(delay)
 
-        return response.output_text
+            return response.output_text
+        except Exception as e:
+            logger.error(f"Error calling AI service: {e}")
+            return None
     
+
     def assess_image(
         self,
         page_num: int, 
@@ -164,59 +169,63 @@ class PDFPageAnalyzer:
         looking for long code lines, and transform
         result into useable data.
         """
-        page_problematic_code_blocks = []
-        
-        raw_page_analysis = self._call_ai_service(
-            image_data_uri, 
-            text_width_inches, 
-            fail_string, 
-            no_issues_str, 
-            issues_str, 
-            should_suggest_resolution, 
-            detail,
-            delay
-        )
-
-        if re.search(fail_string, raw_page_analysis, flags=re.I):
-            # analysis failed
-            return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
-        
-        if not re.search(issues_str, raw_page_analysis, flags=re.I):
-            # no page issue found
-            """
-            TODO: consider that this is a shortcut;
-            should we just check for issue_locations 
-            and issue_reformatting instead? maybe get
-            some testing in and see how it goes
-            """
-            return PDFPageAnalysis(page_num=page_num, page_has_issue=False)
-
-        # issue(s) found?
-        issue_locations = re.findall(r'ISSUE\s+(\d+)\s+LOCATION:\s*(\d+\.?\d*)\s*inches', raw_page_analysis, flags=re.I)
-        issue_reformatting_suggestions = re.findall(r'ISSUE\s+(\d+)\s+REFORMATTED:\s*(```.*?[^`]+```)', raw_page_analysis, flags=(re.I | re.DOTALL))
-        
-        if not issue_locations and not issue_reformatting_suggestions:
-            # analysis failed
-            return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
-        
-        # combine data into tuples, one for each numbered issue
-        locations_and_code_suggestions = self._combine_loc_and_formatting_tuples(issue_locations, issue_reformatting_suggestions)
-
-        # prepare ProblematicCodeBlocks
-        for location_and_code_suggestion in locations_and_code_suggestions:
-            page_problematic_code_blocks.append(
-                ProblematicCodeBlock(
-                    page_issue_num=int(location_and_code_suggestion[0]),
-                    inches_from_top=location_and_code_suggestion[1],
-                    reformatting_suggestion=location_and_code_suggestion[2]
-                )
+        try:
+            page_problematic_code_blocks = []
+            
+            raw_page_analysis = self._call_ai_service(
+                image_data_uri, 
+                text_width_inches, 
+                fail_string, 
+                no_issues_str, 
+                issues_str, 
+                should_suggest_resolution, 
+                detail,
+                delay
             )
-        
-        return PDFPageAnalysis(
-            page_num=page_num,
-            page_has_issue=True,
-            page_problematic_code_blocks=page_problematic_code_blocks
-        )
+
+            if re.search(fail_string, raw_page_analysis, flags=re.I):
+                # analysis failed
+                return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
+            
+            if not re.search(issues_str, raw_page_analysis, flags=re.I):
+                # no page issue found
+                """
+                TODO: consider that this is a shortcut;
+                should we just check for issue_locations 
+                and issue_reformatting instead? maybe get
+                some testing in and see how it goes
+                """
+                return PDFPageAnalysis(page_num=page_num, page_has_issue=False)
+
+            # issue(s) found?
+            issue_locations = re.findall(r'ISSUE\s+(\d+)\s+LOCATION:\s*(\d+\.?\d*)\s*inches', raw_page_analysis, flags=re.I)
+            issue_reformatting_suggestions = re.findall(r'ISSUE\s+(\d+)\s+REFORMATTED:\s*(```.*?[^`]+```)', raw_page_analysis, flags=(re.I | re.DOTALL))
+            
+            if not issue_locations and not issue_reformatting_suggestions:
+                # analysis failed
+                return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
+            
+            # combine data into tuples, one for each numbered issue
+            locations_and_code_suggestions = self._combine_loc_and_formatting_tuples(issue_locations, issue_reformatting_suggestions)
+
+            # prepare ProblematicCodeBlocks
+            for location_and_code_suggestion in locations_and_code_suggestions:
+                page_problematic_code_blocks.append(
+                    ProblematicCodeBlock(
+                        page_issue_num=int(location_and_code_suggestion[0]),
+                        inches_from_top=location_and_code_suggestion[1],
+                        reformatting_suggestion=location_and_code_suggestion[2]
+                    )
+                )
+            
+            return PDFPageAnalysis(
+                page_num=page_num,
+                page_has_issue=True,
+                page_problematic_code_blocks=page_problematic_code_blocks
+            )
+        except Exception as e:
+            logger.error(f"Error assessing image of page {page_num + 1}: {e}")
+            return None
 
 
     def _combine_loc_and_formatting_tuples(
