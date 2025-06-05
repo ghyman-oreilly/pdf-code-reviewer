@@ -6,17 +6,23 @@ from pydantic import BaseModel
 
 
 class PDFPageImage(BaseModel):
-    image_filepath: Union[str, Path]
+    image_filepath: Union[str, Path, None]
     pdf_page: int
     page_width_inches: float
 
 
-def pdf_to_images(pdf_path: Union[str, Path], temp_dir: Union[str, Path]) -> List[PDFPageImage]:
+def pdf_to_images(
+        pdf_path: Union[str, Path], 
+        temp_dir: Union[str, Path],
+        generate_image_files: bool = True
+    ) -> List[PDFPageImage]:
     """
     Convert PDF pages to images and store them in temporary files.
     
     Args:
         pdf_path: Path to the PDF file
+        temp_dir: Directory to save images files at
+        generate_image_files: use False if loading page analyses from JSON file (default True)
     
     Returns:
         List of PDFImage instances 
@@ -30,25 +36,34 @@ def pdf_to_images(pdf_path: Union[str, Path], temp_dir: Union[str, Path]) -> Lis
     for page_num in range(len(pdf_document)):
         # Get the page
         page = pdf_document[page_num]
-                    
-        # Get the page's pixmap (image)
-        pix = page.get_pixmap()
-        
+
         # Get page width in inches
         width = page.rect.width / 72.0
+
+        if generate_image_files:
+
+            # Get the page's pixmap (image)
+            pix = page.get_pixmap()
+            
+            # Create a temporary file path for this image
+            temp_image_path = os.path.join(temp_dir, f"page_{page_num}.png")
+            
+            # Save the image
+            pix.save(temp_image_path)
         
-        # Create a temporary file path for this image
-        temp_image_path = os.path.join(temp_dir, f"page_{page_num}.png")
-        
-        # Save the image
-        pix.save(temp_image_path)
-        
-        # Create PDFPageImage instance
-        page_image = PDFPageImage(
-            image_filepath = temp_image_path,
-            pdf_page = page_num,
-            page_width_inches = width
-        )
+            # Create PDFPageImage instance
+            page_image = PDFPageImage(
+                image_filepath = temp_image_path,
+                pdf_page = page_num,
+                page_width_inches = width
+            )
+        else:
+            # Create PDFPageImage instance
+            page_image = PDFPageImage(
+                image_filepath = None,
+                pdf_page = page_num,
+                page_width_inches = width
+            )
 
         page_images.append(page_image)
 

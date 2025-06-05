@@ -1,5 +1,8 @@
 from dotenv import load_dotenv
-from pydantic import BaseModel
+import json
+import logging
+from pathlib import Path
+from pydantic import BaseModel, model_validator
 import openai
 import os
 import re
@@ -9,6 +12,9 @@ from pdf_reader import PDFPageImage
 
 # load env variables from .env
 load_dotenv()
+
+# init logger
+logger = logging.Logger
 
 # initialize client
 api_key = os.getenv("OPENAI_API_KEY")
@@ -25,6 +31,17 @@ class PDFPageAnalysis(BaseModel):
     analysis_failed: Union[bool, None] = None
     page_has_issue: Union[bool, None] = None
     page_problematic_code_blocks: Union[List[ProblematicCodeBlock], List] = []
+
+    @model_validator(mode='before')
+    def validate_blocks(cls, values):
+        if 'page_problematic_code_blocks' in values and values['page_problematic_code_blocks']:
+            values['page_problematic_code_blocks'] = [
+                ProblematicCodeBlock.model_validate(block) 
+                if isinstance(block, dict) 
+                else block 
+                for block in values['page_problematic_code_blocks']
+            ]
+        return values
 
 
 class PDFPageAnalyzer:
@@ -227,7 +244,26 @@ class PDFPageAnalyzer:
         return result
 
 
+def generate_page_analyses_from_file(filepath: Union[str, Path]):
+    """
+    Generate a list of PDFPageAnalysis instances from JSON file.
+    """
+    
+    page_analyses: Union[List[PDFPageAnalysis], List] = []
+    
+    with open(filepath, 'r') as f:
+        json_data = json.load(f)
+    
+    try:
+        for obj in json_data:
+            page_analysis = PDFPageAnalysis.model_validate(obj)
+            page_analyses.append(page_analysis)
+        return page_analyses
+    except Exception as e:
+        logger.error(f"Unable to read page analyses from JSON file. {e}")
+    
 
+    
             
 
 
