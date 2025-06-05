@@ -113,8 +113,7 @@ def start(pdf_path, existing_page_analyses_json=None):
     annotated_pdf.close()
     click.echo(f"Annotated PDF written to {output_pdf_path}")
 
-
-    # TODO: write back to copy of PDF or, optionally, txt (or csv?)
+    # TODO: optionally write back txt (or csv?)
     # TODO: option to include annotation for failed page analyses in output PDF
 
     # clean up temp_dir recursively at the end
