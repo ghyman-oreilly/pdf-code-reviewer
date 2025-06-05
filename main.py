@@ -2,8 +2,9 @@ import click
 from pathlib import Path
 import shutil
 import tempfile
+from typing import List, Union
 
-from image_analyzer import PDFPageAnalyzer
+from image_analyzer import PDFPageAnalyzer, PDFPageAnalysis
 from helpers import get_data_uri_for_image
 from pdf_reader import pdf_to_images
 
@@ -44,7 +45,9 @@ def start(pdf_path):
             click.echo(f"Unable to remove temporary images at {temp_dir}")
         raise e
 
-    click.echo(f"Sending {len(page_images)} to AI service for analysis...")
+    click.echo(f"Sending {len(page_images)} pages to AI service for analysis...")
+
+    page_analyses: Union[List[PDFPageAnalysis], List] = []
 
     # process page_images
     for i, page_image in enumerate(page_images):
@@ -58,10 +61,13 @@ def start(pdf_path):
         # send images to ai_service and prompt, return responses
         pdf_page_analyzer = PDFPageAnalyzer()
         page_analysis = pdf_page_analyzer.assess_image(
-            image_data_uri, 
-            text_width_inches, 
-            should_suggest_resolution, 
+            image_data_uri=image_data_uri, 
+            text_width_inches=text_width_inches, 
+            should_suggest_resolution=should_suggest_resolution, 
         )
+
+        if page_analysis:
+            page_analyses.append(page_analysis)
     
     # TODO: write back to copy of PDF or, optionally, txt (or csv?)
 
