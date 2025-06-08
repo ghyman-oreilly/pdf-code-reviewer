@@ -76,8 +76,6 @@ def check_pdf_code(pdf_path, get_formatting_suggestions=False, load_from_json=No
 
                         fail_str = 'UNABLE_TO_ASSESS'
 
-                        # TODO: should we ask just for the offending lines?
-
                         prompt_content = ''.join([
                             "Please reformat this code block, following the standard conventions ",
                             "of the programming language shown, so that no line is longer than ",
