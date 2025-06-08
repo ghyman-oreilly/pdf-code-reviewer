@@ -9,7 +9,7 @@ from typing import List, Union
 
 from ai_service import AIServiceCaller
 from pdf_reader import read_pdf, ProblemPDFPage
-from pdf_writer import write_code_annotations_to_pdf
+from pdf_writer import write_code_annotations_to_pdf, generate_text_lines_from_problem_pages
 
 
 @click.group()
@@ -30,9 +30,20 @@ Arguments:
 @click.option(
     "--load-from-json", 
     "-l", 
-    help="Load code block data and formatting suggestions from JSON file."
+    help="Load code block data and formatting suggestions, if applicable, from JSON file."
     )
-def check_pdf_code(pdf_path, get_formatting_suggestions=False, load_from_json=None):
+@click.option(
+    "--text-file-output", 
+    "-t", 
+    is_flag=True,
+    help="Output code block data and suggestions, if applicable, to text file instead of PDF."
+    )
+def check_pdf_code(
+    pdf_path, 
+    get_formatting_suggestions=False, 
+    load_from_json=None,
+    text_file_output=False
+):
     """
     Check PDF for code blocks with long lines, and annotate
     PDF copy to flag said blocks.
@@ -55,11 +66,11 @@ def check_pdf_code(pdf_path, get_formatting_suggestions=False, load_from_json=No
         json_input_path = None
 
     output_dir = pdf_path.parent
-    output_pdf_path = output_dir / f"{pdf_path.stem}_{int(time.time())}.pdf"
-  
-    click.echo(f"Extracting data from PDF at {pdf_path}...")
+    output_file_stem = f"{pdf_path.stem}_{int(time.time())}"
 
     if not load_from_json or not json_input_path:
+        click.echo(f"Extracting data from PDF at {pdf_path}...")
+
         # Get pages with problematic code blocks
         pages_w_problematic_code = read_pdf(pdf_path)
 
@@ -108,26 +119,35 @@ def check_pdf_code(pdf_path, get_formatting_suggestions=False, load_from_json=No
             click.echo(f"Raw page data (JSON format) backed up at {page_data_save_filepath}")
 
     else:
+        click.echo(f"Loading data from {json_input_path}...")
         # load code block and suggestions data from JSON
         with open(json_input_path, "r") as f:
             pages_data = json.load(f)       
         pages_w_problematic_code = [ProblemPDFPage.model_validate(p) for p in pages_data]
 
     if pages_w_problematic_code:
-        # generate annotated PDF representation and write to file
-        click.echo("Writing annotations to PDF...")
-        annotated_pdf = write_code_annotations_to_pdf(
-            pages_w_problematic_code=pages_w_problematic_code, 
-            original_pdf_filepath=pdf_path,
-            should_suggest_resolution=(get_formatting_suggestions or load_from_json)
-        )
-        annotated_pdf.save(output_pdf_path)
-        annotated_pdf.close()
-        click.echo(f"Annotated PDF written to {output_pdf_path}")
+        if not text_file_output:
+            output_pdf_path = output_dir / f"{output_file_stem}.pdf"
+
+            # generate annotated PDF representation and write to file
+            click.echo("Writing annotations to PDF...")
+            annotated_pdf = write_code_annotations_to_pdf(
+                pages_w_problematic_code=pages_w_problematic_code, 
+                original_pdf_filepath=pdf_path,
+                should_suggest_resolution=(get_formatting_suggestions or load_from_json)
+            )
+            annotated_pdf.save(output_pdf_path)
+            annotated_pdf.close()
+            click.echo(f"Annotated PDF written to {output_pdf_path}")
+        else:
+            output_txt_path = output_dir / f"{output_file_stem}.txt"
+            text_lines = generate_text_lines_from_problem_pages(pages_w_problematic_code)
+            if text_lines:
+                with open(str(output_txt_path), 'w') as f:
+                    f.writelines(text_lines)
+                click.echo(f"Text output written to {output_txt_path}")
     else:
         click.echo("No problematic code blocks found.")
-
-    # TODO: optionally write back txt (or csv?)
 
 
 if __name__ == '__main__':

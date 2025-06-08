@@ -75,3 +75,35 @@ def add_text_annotation_to_page(
     except Exception as e:
         logger.error(f"Error adding annotation: {e}")
         return None
+
+
+def generate_text_lines_from_problem_pages(
+        pages_w_problematic_code: list[ProblemPDFPage]
+    ):
+    text_lines = []
+
+    if not pages_w_problematic_code:
+        return []
+
+    for page in pages_w_problematic_code:
+        page_num = page.page_num + 1 # human-friendly numbering
+        num_blocks = len(page.problem_code_blocks)
+        text_lines.append(f"********** START PDF Page {page_num} (absolute page) **********\n\n")
+        blocks = page.problem_code_blocks
+        for i, block in enumerate(blocks):
+            # add code block existing text
+            text_lines.append(f"***** START Problematic Code Block {i+1} of {num_blocks} *****\n")
+            text_lines.append(block.full_text)
+            text_lines.append("\n")
+            text_lines.append(f"***** END Problematic Code Block {i+1} of {num_blocks} *****\n\n")
+
+            # add code block suggested text
+            suggested_text = block.suggested_reformat
+            if suggested_text:
+                text_lines.append(f"***** START Suggested Code Block {i+1} of {num_blocks} *****\n")
+                text_lines.append(suggested_text)
+                text_lines.append("\n")
+                text_lines.append(f"***** END Suggested Code Block {i+1} of {num_blocks} *****\n\n")
+        text_lines.append(f"********** END PDF Page {page_num} (absolute page) **********\n\n")
+    
+    return text_lines
