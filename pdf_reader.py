@@ -31,11 +31,27 @@ def pdf_to_images(
     
     # Open the PDF
     pdf_document = fitz.open(pdf_path)
-            
+
+    # List to store minimum text block x0 on each page,
+    # for determining x1 threshold for code lines
+    min_x0s = []
+
     # Convert each page to an image
     for page_num in range(len(pdf_document)):
         # Get the page
         page = pdf_document[page_num]
+
+    x0s = []
+    blocks = page.get_text("dict")["blocks"]
+    for block in blocks:
+        if "lines" not in block:
+            continue
+        for line in block["lines"]:
+            for span in line["spans"]:
+                if span["text"].strip():  # non-empty
+                    x0s.append(span["bbox"][0])  # raw x0 without rounding
+    if x0s:
+        min_x0s.append(min(x0s))
 
         # Get page width in inches
         width = page.rect.width / 72.0
