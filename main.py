@@ -2,14 +2,14 @@ import click
 import json
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 import time
 from typing import List, Union
 
-from ai_service import PDFPageAnalyzer, PDFPageAnalysis, generate_page_analyses_from_file
-from helpers import get_data_uri_for_image
-from pdf_reader import read_pdf
-from pdf_writer import write_page_analyses_to_pdf
+from ai_service import AIServiceCaller
+from pdf_reader import read_pdf, ProblemPDFPage
+from pdf_writer import write_code_annotations_to_pdf
 
 
 @click.group()
@@ -22,11 +22,21 @@ Arguments:
 """)
 @click.argument("pdf_path")
 @click.option(
-    "--get-code-formatting-suggestions", 
+    "--get-formatting-suggestions", 
     "-c", 
+    is_flag=True,
     help="Send problematic code text to AI service for reformatting suggestions."
     )
-def check_pdf(pdf_path, check_code=True, get_code_formatting_suggestions=False):
+@click.option(
+    "--load-from-json", 
+    "-l", 
+    help="Load code block data and formatting suggestions from JSON file."
+    )
+def check_pdf_code(pdf_path, get_formatting_suggestions=False, load_from_json=None):
+    """
+    Check PDF for code blocks with long lines, and annotate
+    PDF copy to flag said blocks.
+    """
     if not pdf_path:
         raise click.UsageError('`pdf_path` argument is required.')
     
@@ -34,71 +44,92 @@ def check_pdf(pdf_path, check_code=True, get_code_formatting_suggestions=False):
     if not pdf_path.is_file() or pdf_path.suffix.lower() != '.pdf':
         raise ValueError('`pdf_path` must be a valid path to a PDF file.')    
     
+    if load_from_json:
+        json_input_path = Path(load_from_json)
+        if not json_input_path.is_file() or json_input_path.suffix.lower() != '.json':
+            raise ValueError('`--load-from-json` option requires a valid path to a JSON file.')    
+    elif not click.prompt("Script requires a PDF with yellow code-eyeballer blocks. Do you wish to continue? (y/n)").strip().lower() in ['y', 'yes']: 
+        click.echo("Exiting...")
+        sys.exit(0)
+    else:
+        json_input_path = None
+
     output_dir = pdf_path.parent
     output_pdf_path = output_dir / f"{pdf_path.stem}_{int(time.time())}.pdf"
   
-    click.echo(f"Extracting pages and data from PDF at {pdf_path}...")
+    click.echo(f"Extracting data from PDF at {pdf_path}...")
 
-    # Get pages with problematic code blocks
-    pages_w_problematic_code = read_pdf(pdf_path)
+    if not load_from_json or not json_input_path:
+        # Get pages with problematic code blocks
+        pages_w_problematic_code = read_pdf(pdf_path)
 
-    print("test")
+        if pages_w_problematic_code:
+            if get_formatting_suggestions:
+                service_caller = AIServiceCaller()
+                click.echo(f"Sending data to AI service for analysis...")
 
-    # if get_code_formatting_suggestions:
-    #     click.echo(f"Sending {len(page_images)} pages to AI service for analysis...")
+                for i, page in enumerate(pages_w_problematic_code):
 
-    #     page_analyses: Union[List[PDFPageAnalysis], List] = []
+                    for j, block in enumerate(page.problem_code_blocks):
 
-    #     # process page_images
-    #     for i, page_image in enumerate(page_images):
+                        click.echo(f"Processing problematic code block {j+1} of {len(page.problem_code_blocks)} on page {i+1} of {len(pages_w_problematic_code)} with problem code blocks...")
 
-    #         click.echo(f"Processing page {i+1} of {len(page_images)}...")
+                        fail_str = 'UNABLE_TO_ASSESS'
 
-    #         page_num = page_image.pdf_page
+                        # TODO: should we ask just for the offending lines?
 
-    #         # enrich page_image with base64_string (lazy loaded)
-    #         image_filepath = page_image.image_filepath
-    #         image_data_uri = get_data_uri_for_image(image_filepath)
+                        prompt_content = ''.join([
+                            "Please reformat this code block, following the standard conventions ",
+                            "of the programming language shown, so that no line is longer than ",
+                            f"{block.chars_fit} characters, including spaces:\n\n",
+                            "```\n",
+                            f"{block.full_text}"
+                            "```\n",
+                            "If you're unable to correctly reformat the code, ",
+                            f"please simply respond with: {fail_str}\n\n",
+                            f"In your reponse, please provide ONLY the reformatted code or {fail_str}.\n\n",
+                            "Do NOT provide any notes or commentary."
+                        ])
 
-    #         # send images to ai_service and prompt, return responses
-    #         pdf_page_analyzer = PDFPageAnalyzer()
-    #         page_analysis = pdf_page_analyzer.assess_image(
-    #             page_num=page_num,
-    #             image_data_uri=image_data_uri, 
-    #             text_width_inches=text_width_inches, 
-    #             should_suggest_resolution=get_code_formatting_suggestions, 
-    #         )
-    #         if page_analysis:
-    #             page_analyses.append(page_analysis)
+                        # call AI service
+                        response = service_caller.call_ai_service(
+                            service_caller.create_prompt(prompt_content)
+                        )
 
-        
-    # if page_analyses:
-    #     # write analyses to file in case user wants to reload in future
-    #     # e.g., user needs a new annotated PDF and doesn't want to rerun analysis service
-    #     analyses_save_filepath = output_dir / f"page_analyses_backup_{int(time.time())}.json"
-    #     with open(str(analyses_save_filepath), 'w') as f:
-    #         json.dump([pa.model_dump() for pa in page_analyses], f)
-    #     click.echo(f"Raw page analyses (JSON format) backed up at {analyses_save_filepath}")
+                        # add response to block
+                        if response:
+                            response = response.strip()
+                            if not fail_str in response:
+                                block.suggested_reformat = response
+                
+            # write analyses to file in case user wants to reload in future
+            # e.g., user needs a new annotated PDF and doesn't want to rerun AI service
+            page_data_save_filepath = output_dir / f"page_data_backup_{int(time.time())}.json"
+            with open(str(page_data_save_filepath), 'w') as f:
+                json.dump([p.model_dump(mode="json") for p in pages_w_problematic_code], f)
+            click.echo(f"Raw page data (JSON format) backed up at {page_data_save_filepath}")
 
-    
-    # click.echo("Writing annotations to PDF...")
+    else:
+        # load code block and suggestions data from JSON
+        with open(json_input_path, "r") as f:
+            pages_data = json.load(f)       
+        pages_w_problematic_code = [ProblemPDFPage.model_validate(p) for p in pages_data]
 
-    # # generate annotated PDF representation and write to file
-    # annotated_pdf = write_page_analyses_to_pdf(
-	# 	page_analyses=page_analyses, 
-	# 	original_pdf_filepath=pdf_path,
-	# 	annotate_failed_analyses=False,
-	# 	inches_from_left=annotation_inches_from_left,
-	# 	should_suggest_resolution=get_code_formatting_suggestions
-	# )
-    # annotated_pdf.save(output_pdf_path)
-    # annotated_pdf.close()
-    # click.echo(f"Annotated PDF written to {output_pdf_path}")
+    if pages_w_problematic_code:
+        # generate annotated PDF representation and write to file
+        click.echo("Writing annotations to PDF...")
+        annotated_pdf = write_code_annotations_to_pdf(
+            pages_w_problematic_code=pages_w_problematic_code, 
+            original_pdf_filepath=pdf_path,
+            should_suggest_resolution=(get_formatting_suggestions or load_from_json)
+        )
+        annotated_pdf.save(output_pdf_path)
+        annotated_pdf.close()
+        click.echo(f"Annotated PDF written to {output_pdf_path}")
+    else:
+        click.echo("No problematic code blocks found.")
 
     # TODO: optionally write back txt (or csv?)
-    # TODO: option to include annotation for failed page analyses in output PDF
-
-
 
 
 if __name__ == '__main__':

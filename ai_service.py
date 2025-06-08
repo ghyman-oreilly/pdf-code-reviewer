@@ -7,7 +7,7 @@ import openai
 import os
 import re
 import time
-from typing import Union, List, Tuple
+from typing import Union, Optional, List, Dict
 
 from pdf_reader import ProblemPDFPage
 
@@ -22,126 +22,63 @@ api_key = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI(api_key=api_key)
 
 
-class ProblematicCodeBlock(BaseModel):
-    page_issue_num: int
-    inches_from_top: Union[float, None] = None
-    reformatting_suggestion: Union[str, None] = None
+class SystemRole(BaseModel):
+    role: str = "system"
+    content: str
 
 
-class PDFPageAnalysis(BaseModel):
-    page_num: Union[int, None] = None
-    analysis_failed: Union[bool, None] = None
-    page_has_issue: Union[bool, None] = None
-    page_problematic_code_blocks: Union[List[ProblematicCodeBlock], List] = []
-
-    @model_validator(mode='before')
-    def validate_blocks(cls, values):
-        if 'page_problematic_code_blocks' in values and values['page_problematic_code_blocks']:
-            values['page_problematic_code_blocks'] = [
-                ProblematicCodeBlock.model_validate(block) 
-                if isinstance(block, dict) 
-                else block 
-                for block in values['page_problematic_code_blocks']
-            ]
-        return values
+class UserRole(BaseModel):
+    role: str = "user"
+    content: str
 
 
-class PDFPageAnalyzer:
+class Prompt(BaseModel):
+    user_role: UserRole
+    system_role: Optional[SystemRole] = None
+
+    def as_messages(self) -> List[Dict[str, str]]:
+        messages = []
+        if self.system_role:
+            messages.append(self.system_role.model_dump())
+        messages.append(self.user_role.model_dump())
+        return messages
+
+
+class AIServiceCaller:
     def __init__(self, model="gpt-4.1"):
         self.model = model
 
-    def _create_prompt(
+    def create_prompt(
             self, 
-            image_data_uri: str, 
-            text_width_inches: Union[str, float, int],
-            fail_string: str = 'UNABLE_TO_ASSESS',
-            no_issues_str: str = 'NO_ISSUES',
-            issues_str: str = 'ISSUES_FOUND',
-            should_suggest_resolution: bool = True,
-            detail="high"
+            user_role_content: str,
+            system_role_content: str = None
+
         ):
         """
-        Build the full user prompt for an AI service call.
-
-        Args:
-            page_image (PDFPageImage): The page image object containing metadata like page number and dimensions
-            image_data_uri (str): Complete data URI (format: data:<mimetype>;base64,<encoded-data>)
-            fail_string (str, optional): String to use when assessment fails. Defaults to 'UNABLE_TO_ASSESS'
-            no_issues_str (str, optional): String to use when assessment finds no issues. Defaults to 'NO_ISSUES'
-            ...
-
-        Returns:
-            str: The formatted prompt string ready for the AI service
+        Build the prompt for an AI service call.
         """
+        if system_role_content:
+            return Prompt(
+                user_role=UserRole(content=user_role_content),
+                system_role=SystemRole(content=system_role_content)
+            )
 
-        if not isinstance(text_width_inches, str):
-            text_width_inches = str(text_width_inches)
+        return Prompt(
+                user_role=UserRole(content=user_role_content)
+            )
 
-        input_text = "Your task is to assess this image of a PDF page.\n\n"
-
-        input_text += "Please check this PDF page to see if any code is running beyond the text area on the right side of the page.\n\n"
-
-        input_text += f"If there is not, please simply respond with:\n\nCONCLUSION: {no_issues_str}.\n\n"
-
-        input_text += f"If there is, please respond: \n\nCONCLUSION: {issues_str}.\n\n" 
-        
-        input_text += "Then provide the height from the top of the page, in inches, of each code block with lines running beyond the text area, in this format:\n\n"
-
-        input_text += "**ISSUE LOCATIONS**\nISSUE 1 LOCATION: N.N inches\nISSUE 2 LOCATION: N.N inches\netc.\n\n"
-        
-        input_text += f"You can use the page's text width as a reference measurement. It is {text_width_inches} inches wide.\n\n"
-
-        if should_suggest_resolution:
-            input_text += "If you are able to provide a reformatting suggestion for each problematic code block on the page, you should do so in this format:"
-
-            input_text += "**ISSUE REFORMATTING**\nISSUE 1 REFORMATTED: [reformated code here]\nISSUE 2 REFORMATTED: [reformated code here]\netc.\n\n"
-
-        input_text += "IMPORTANT: DO NOT PROVIDE ANY OTHER NOTES OR COMMENTARY.\n\n"
-
-        input_text += f"If you are uncertain how to or unable to assess the image, respond:\n\nCONCLUSION: {fail_string}"
-       
-        return [
-            {
-                "role": "user",
-                "content": [
-                    { "type": "input_text", "text": input_text },
-                    {
-                        "type": "input_image",
-                        "image_url": image_data_uri,
-                        "detail": detail
-                    },
-                ],
-            }
-        ]
-
-    def _call_ai_service(
+    def call_ai_service(
             self, 
-            image_data_uri: str, 
-            text_width_inches: Union[str, float, int],
-            fail_string: str = 'UNABLE_TO_ASSESS',
-            no_issues_str: str = 'NO_ISSUES',
-            issues_str: str = 'ISSUES_FOUND',
-            should_suggest_resolution: bool = True,
-            detail="high",
+            prompt: Prompt,
             delay: int = 0.5
     ):
         """
-        Generates sends image and prompt to AI for assessment.
+        Call OpenAI responses API.
         """
         try:
-            prompt = self._create_prompt(
-                image_data_uri, 
-                text_width_inches, 
-                fail_string, 
-                no_issues_str, 
-                issues_str, 
-                should_suggest_resolution, 
-                detail
-            )
-            
             response = client.responses.create(
                 model=self.model,
-                input=prompt
+                input=prompt.as_messages()
             )
             
             time.sleep(delay)
@@ -152,133 +89,14 @@ class PDFPageAnalyzer:
             return None
     
 
-    def assess_image(
-        self,
-        page_num: int, 
-        image_data_uri: str, 
-        text_width_inches: Union[str, float, int],
-        fail_string: str = 'UNABLE_TO_ASSESS',
-        no_issues_str: str = 'NO_ISSUES',
-        issues_str: str = 'ISSUES_FOUND',
-        should_suggest_resolution: bool = True,
-        detail="high",
-        delay: int = 0.5    
-    ):
-        """
-        Call AI service for analysis of PDF page image,
-        looking for long code lines, and transform
-        result into useable data.
-        """
-        try:
-            page_problematic_code_blocks = []
-            
-            raw_page_analysis = self._call_ai_service(
-                image_data_uri, 
-                text_width_inches, 
-                fail_string, 
-                no_issues_str, 
-                issues_str, 
-                should_suggest_resolution, 
-                detail,
-                delay
-            )
-
-            if re.search(fail_string, raw_page_analysis, flags=re.I):
-                # analysis failed
-                return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
-            
-            if not re.search(issues_str, raw_page_analysis, flags=re.I):
-                # no page issue found
-                """
-                TODO: consider that this is a shortcut;
-                should we just check for issue_locations 
-                and issue_reformatting instead? maybe get
-                some testing in and see how it goes
-                """
-                return PDFPageAnalysis(page_num=page_num, page_has_issue=False)
-
-            # issue(s) found?
-            issue_locations = re.findall(r'ISSUE\s+(\d+)\s+LOCATION:\s*(\d+\.?\d*)\s*inches', raw_page_analysis, flags=re.I)
-            issue_reformatting_suggestions = re.findall(r'ISSUE\s+(\d+)\s+REFORMATTED:\s*(```.*?[^`]+```)', raw_page_analysis, flags=(re.I | re.DOTALL))
-            
-            if not issue_locations and not issue_reformatting_suggestions:
-                # analysis failed
-                return PDFPageAnalysis(page_num=page_num, analysis_failed=True)
-            
-            # combine data into tuples, one for each numbered issue
-            locations_and_code_suggestions = self._combine_loc_and_formatting_tuples(issue_locations, issue_reformatting_suggestions)
-
-            # prepare ProblematicCodeBlocks
-            for location_and_code_suggestion in locations_and_code_suggestions:
-                page_problematic_code_blocks.append(
-                    ProblematicCodeBlock(
-                        page_issue_num=int(location_and_code_suggestion[0]),
-                        inches_from_top=location_and_code_suggestion[1],
-                        reformatting_suggestion=location_and_code_suggestion[2]
-                    )
-                )
-            
-            return PDFPageAnalysis(
-                page_num=page_num,
-                page_has_issue=True,
-                page_problematic_code_blocks=page_problematic_code_blocks
-            )
-        except Exception as e:
-            logger.error(f"Error assessing image of page {page_num + 1}: {e}")
-            return None
 
 
-    def _combine_loc_and_formatting_tuples(
-            self,
-            locations: Union[Tuple, None], 
-            reformattings: Union[Tuple, None]
-        ):
-        """
-        Combine location and code format suggestion tuples based
-        on issue number.
-        
-        Args:
-            locations: list[(issue_num, inches_from_top)] or None
-            reformattings: list[(issue_num, reformatting)] or None
-        Return:
-            list[(issue_num, inches_from_tope, reformatting)]
-        """
-        # Handle None inputs
-        locations = locations or []
-        reformattings = reformattings or []
-        
-        # Create dictionaries keyed by the first element of each tuple
-        loc_dict = dict(locations)
-        ref_dict = dict(reformattings)
-        
-        # Get all unique keys
-        all_keys = set(loc_dict.keys()) | set(ref_dict.keys())
-        
-        # Combine the pairs, using None for missing values
-        result = []
-        for key in all_keys:
-            result.append((key, loc_dict.get(key), ref_dict.get(key)))
-            
-        return result
 
 
-def generate_page_analyses_from_file(filepath: Union[str, Path]):
-    """
-    Generate a list of PDFPageAnalysis instances from JSON file.
-    """
-    
-    page_analyses: Union[List[PDFPageAnalysis], List] = []
-    
-    with open(filepath, 'r') as f:
-        json_data = json.load(f)
-    
-    try:
-        for obj in json_data:
-            page_analysis = PDFPageAnalysis.model_validate(obj)
-            page_analyses.append(page_analysis)
-        return page_analyses
-    except Exception as e:
-        logger.error(f"Unable to read page analyses from JSON file. {e}")
+
+
+
+
     
 
     

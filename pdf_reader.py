@@ -1,5 +1,5 @@
 import fitz
-from typing import Union
+from typing import Union, Optional
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -9,10 +9,10 @@ EDGE_TOLERANCE = 2.0  # points
 
 
 class Rectangle(BaseModel):
-    x0: float
-    x1: float
-    y0: float
-    y1: float
+    x0: float # left edge (min x)
+    x1: float # right edge (max x)
+    y0: float # top edge (min y)
+    y1: float # bottom edge (max y)
 
     def as_fitz_rect(self):
         import fitz
@@ -36,6 +36,13 @@ class ProblemCodeBlock(BaseModel):
     font_size: Union[float, None] = None
     suggested_reformat: Union[str, None] = None
 
+    @property
+    def chars_fit(self) -> Optional[int]:
+        if not self.font_size:
+            return None
+        char_width_factor = 0.5 # estimated width as percentage of point size
+        est_char_width = self.font_size * char_width_factor
+        return int(self.allotted_rect.width() // est_char_width)
 
 class ProblemPDFPage(BaseModel):
     filepath: Union[str, Path]
@@ -65,6 +72,8 @@ def read_pdf(pdf_path: Union[str, Path]):
         for yrect in yellow_rects:
             font_size = None
             
+            # TODO: raise warning if no yellow blocks found
+
             check_rect = fitz.Rect(yrect)
             check_rect.x1 += EDGE_TOLERANCE
 
