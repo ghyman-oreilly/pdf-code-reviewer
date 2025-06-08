@@ -5,6 +5,65 @@ from pathlib import Path
 from pydantic import BaseModel
 
 
+class PDFPage(BaseModel):
+    pass
+
+
+class ProblemCodeBlock(BaseModel):
+    pass
+
+
+# Tolerance in points for right edge matching
+EDGE_TOLERANCE = 2.0  # points
+
+
+def read_pdf(pdf_path: Union[str, Path]):
+
+    pages_w_problematic_code: Union[list[PDFPage], list] = []
+    
+    doc = fitz.open(pdf_path)
+
+    for page_num, page in enumerate(doc):
+       
+        page_width = page.rect.width
+
+        yellow_rects = []
+        
+        for d in page.get_drawings():
+            # type if fill or rect and is yellow
+            if (d['type'] == 'f' or d['type'] == 'rect') and is_yellow(d.get('fill')):
+                yellow_rects.append(d['rect'])
+
+        for idx, yrect in enumerate(yellow_rects):
+            check_rect = fitz.Rect(yrect)
+            check_rect.x1 += EDGE_TOLERANCE
+
+            # Get original clipped text and right-check expanded text
+            text_strict = page.get_textbox(yrect).strip()
+            text_check = page.get_textbox(check_rect).strip()
+
+            if text_strict != text_check:
+                print(f"⚠️ Overflow detected on p. {page_num},  yellow box #{idx+1} at {yrect}.")
+
+                # Step 3: Expand yrect's right side to the page edge
+                extended_rect = fitz.Rect(yrect)
+                extended_rect.x1 = page_width  # full to right margin
+
+                # Step 4: Get full text from extended rectangle
+                text_full = page.get_textbox(extended_rect).strip()
+
+                print("📌 Full text from extended box:")
+                print("—" * 40)
+                print(text_full)
+                print("—" * 40)
+
+
+
+def is_yellow(color, tolerance=0.05):
+    if not color: return False
+    r, g, b = color
+    return abs(r - 1.0) < tolerance and abs(g - 1.0) < tolerance and b < tolerance
+
 class PDFPageImage(BaseModel):
     image_filepath: Union[str, Path, None]
     pdf_page: int

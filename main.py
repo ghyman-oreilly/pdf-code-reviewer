@@ -8,7 +8,7 @@ from typing import List, Union
 
 from image_analyzer import PDFPageAnalyzer, PDFPageAnalysis, generate_page_analyses_from_file
 from helpers import get_data_uri_for_image
-from pdf_reader import pdf_to_images
+from pdf_reader import pdf_to_images, read_pdf
 from pdf_writer import write_page_analyses_to_pdf
 
 
@@ -57,6 +57,7 @@ def start(pdf_path, existing_page_analyses_json=None):
 
     # Generate images from PDF
     try:
+        read_pdf(pdf_path)
         page_images = pdf_to_images(pdf_path, temp_dir, generate_image_files=generate_image_files)
     except Exception as e:
         try:
