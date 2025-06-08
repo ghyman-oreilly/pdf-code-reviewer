@@ -1,4 +1,5 @@
 import fitz
+import logging
 from typing import Union, Optional
 from pathlib import Path
 from pydantic import BaseModel
@@ -6,6 +7,9 @@ from pydantic import BaseModel
 
 # Tolerance in points for right edge matching
 EDGE_TOLERANCE = 2.0  # points
+
+# init logger
+logger = logging.getLogger(__name__)
 
 
 class Rectangle(BaseModel):
@@ -68,6 +72,9 @@ def read_pdf(pdf_path: Union[str, Path]):
             # type if fill or rect and is yellow
             if (d['type'] == 'f' or d['type'] == 'rect') and is_yellow(d.get('fill')):
                 yellow_rects.append(d['rect'])
+
+        if not yellow_rects:
+            logger.warning("No code-eyeballer boxes found in PDF. Please make sure code-eyeballer CSS has been used.")
 
         for yrect in yellow_rects:
             font_size = None
