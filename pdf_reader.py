@@ -79,8 +79,6 @@ def read_pdf(pdf_path: Union[str, Path]):
         for yrect in yellow_rects:
             font_size = None
             
-            # TODO: raise warning if no yellow blocks found
-
             check_rect = fitz.Rect(yrect)
             check_rect.x1 += EDGE_TOLERANCE
 
