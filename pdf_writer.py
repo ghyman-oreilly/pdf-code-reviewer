@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import List, Union
 
-from image_analyzer import PDFPageAnalysis
+from ai_service import PDFPageAnalysis
 
 
 logger = logging.getLogger(__name__)

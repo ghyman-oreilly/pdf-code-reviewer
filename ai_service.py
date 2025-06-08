@@ -9,7 +9,7 @@ import re
 import time
 from typing import Union, List, Tuple
 
-from pdf_reader import PDFPageImage
+from pdf_reader import ProblemPDFPage
 
 # load env variables from .env
 load_dotenv()
