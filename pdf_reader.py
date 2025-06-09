@@ -60,6 +60,8 @@ def read_pdf(pdf_path: Union[str, Path]):
     
     doc = fitz.open(pdf_path)
 
+    code_eyeballer_found = False
+
     for page_num, page in enumerate(doc):
        
         problematic_code_on_page: Union[list[ProblemCodeBlock], list] = []
@@ -73,8 +75,8 @@ def read_pdf(pdf_path: Union[str, Path]):
             if (d['type'] == 'f' or d['type'] == 'rect') and is_yellow(d.get('fill')):
                 yellow_rects.append(d['rect'])
 
-        if not yellow_rects:
-            logger.warning("No code-eyeballer boxes found in PDF. Please make sure code-eyeballer CSS has been used.")
+        if yellow_rects:
+            code_eyeballer_found = True
 
         for yrect in yellow_rects:
             font_size = None
@@ -127,6 +129,9 @@ def read_pdf(pdf_path: Union[str, Path]):
                 )
             )
     
+    if not code_eyeballer_found:
+        logger.warning("No code-eyeballer boxes found in PDF. Please make sure code-eyeballer CSS has been used.")
+
     return pages_w_problematic_code
 
 
