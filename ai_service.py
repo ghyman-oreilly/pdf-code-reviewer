@@ -6,7 +6,6 @@ import os
 import time
 from typing import Optional, List, Dict
 
-from pdf_reader import ProblemPDFPage
 
 # load env variables from .env
 load_dotenv()
@@ -16,6 +15,13 @@ logger = logging.getLogger(__name__)
 
 # initialize client
 api_key = os.getenv("OPENAI_API_KEY")
+
+if not api_key:
+    raise EnvironmentError(
+        "The environment variable OPENAI_API_KEY is not set. "
+        "Please set it to your OpenAI API key before running this script."
+    )
+
 client = openai.OpenAI(api_key=api_key)
 
 
