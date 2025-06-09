@@ -1,13 +1,10 @@
 from dotenv import load_dotenv
-import json
 import logging
-from pathlib import Path
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 import openai
 import os
-import re
 import time
-from typing import Union, Optional, List, Dict
+from typing import Optional, List, Dict
 
 from pdf_reader import ProblemPDFPage
 
