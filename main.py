@@ -1,22 +1,15 @@
 import click
 import json
 from pathlib import Path
-import shutil
 import sys
-import tempfile
 import time
-from typing import List, Union
 
 from ai_service import AIServiceCaller
 from pdf_reader import read_pdf, ProblemPDFPage
 from pdf_writer import write_code_annotations_to_pdf, generate_text_lines_from_problem_pages
 
 
-@click.group()
-def cli():
-    pass
-
-@cli.command(help="""
+@click.command(help="""
 Arguments:
   pdf_path: Path to the PDF file.
 """)
@@ -38,7 +31,7 @@ Arguments:
     is_flag=True,
     help="Output code block data and suggestions, if applicable, to text file instead of PDF."
     )
-def check_pdf_code(
+def cli(
     pdf_path, 
     get_formatting_suggestions=False, 
     load_from_json=None,
