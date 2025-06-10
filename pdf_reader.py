@@ -5,9 +5,6 @@ from pathlib import Path
 from pydantic import BaseModel
 
 
-# Tolerance in points for right edge matching
-EDGE_TOLERANCE = 2.0  # points
-
 # init logger
 logger = logging.getLogger(__name__)
 
@@ -81,10 +78,12 @@ def read_pdf(pdf_path: Union[str, Path]):
         for yrect in yellow_rects:
             font_size = None
             
-            check_rect = fitz.Rect(yrect)
-            check_rect.x1 += EDGE_TOLERANCE
+            check_rect = fitz.Rect(yrect) 
+            check_rect.x1 = page_width # expand to right edge
 
             # Get original clipped text and right-check expanded text
+            # TODO: can use an edge tolerance on text_strict here 
+            # (+= 2.0 [pixels], say) if adjustment to sensitivity is needed)
             text_strict = page.get_textbox(yrect).strip()
             text_check = page.get_textbox(check_rect).strip()
 
